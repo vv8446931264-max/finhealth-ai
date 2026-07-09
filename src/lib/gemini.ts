@@ -13,31 +13,35 @@ async function generate(contents: object[]): Promise<string> {
 
 export const isGeminiConfigured = () => true;
 
-export async function getAIRecommendations(a: Assessment, s: Scores): Promise<string[]> {
-  const prompt = `You are an expert Indian personal finance advisor for IDBI Bank. Customer health: Overall ${s.overall}/100, Income Utilization ${s.incomeUtilization}, Savings ${s.savingsRate}, Debt Health ${s.debtHealth}, Investment ${s.investment}, Protection ${s.protection}. Income ₹${a.income.toLocaleString("en-IN")}/month, Savings ₹${a.monthlySavings.toLocaleString("en-IN")}/month, EMI ₹${a.monthlyEMI.toLocaleString("en-IN")}/month, Credit Score ${a.creditScore}, Emergency Fund ${a.emergencyFundMonths}mo, Term Insurance: ${a.hasTermInsurance}, Health Insurance: ${a.hasHealthInsurance}, Dependents: ${a.dependents}, CC Outstanding ₹${a.creditCardOutstanding.toLocaleString("en-IN")}, Investments+FDs ₹${(a.investments+a.fixedDeposits).toLocaleString("en-IN")}. Give exactly 5 personalized actionable recommendations specific to their numbers. Suggest IDBI Bank products (IDBI FD, SIP, IDBI Federal Life Insurance etc). Respond ONLY as JSON array of 5 strings: ["rec1","rec2","rec3","rec4","rec5"]`;
+export async function getAIRecommendations(assessment: Assessment, scores: Scores): Promise<string[]> {
+  const prompt = `You are an expert Indian personal finance advisor for IDBI Bank.
+Customer financial health scores: Overall ${scores.overall}/100, Income Utilization ${scores.incomeUtilization}/100, Savings Rate ${scores.savingsRate}/100, Debt Health ${scores.debtHealth}/100, Investment ${scores.investment}/100, Protection ${scores.protection}/100.
+Financial details: Monthly Income ₹${assessment.income.toLocaleString("en-IN")}, Monthly Savings ₹${assessment.monthlySavings.toLocaleString("en-IN")}, Monthly EMI ₹${assessment.monthlyEMI.toLocaleString("en-IN")}, Credit Score ${assessment.creditScore}, Emergency Fund ${assessment.emergencyFundMonths} months, Term Insurance: ${assessment.hasTermInsurance}, Health Insurance: ${assessment.hasHealthInsurance}, Dependents: ${assessment.dependents}.
+Give exactly 5 personalized actionable recommendations. Suggest IDBI Bank products where relevant. Respond ONLY with a JSON array of 5 strings, no markdown:
+["rec1","rec2","rec3","rec4","rec5"]`;
   try {
     const text = (await generate([{ role: "user", parts: [{ text: prompt }] }])).trim();
-    const m = text.match(/\[[\s\S]*\]/);
-    if (!m) return [];
-    const p = JSON.parse(m[0]);
-    return Array.isArray(p) ? p : [];
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+    const parsed = JSON.parse(match[0]);
+    return Array.isArray(parsed) ? parsed : [];
   } catch { return []; }
 }
 
-export async function getAIScoreNarrative(a: Assessment, s: Scores): Promise<string> {
-  const prompt = `Indian personal finance advisor, IDBI Bank. Customer scored ${s.overall}/100. Scores: Income ${s.incomeUtilization}, Savings ${s.savingsRate}, Debt ${s.debtHealth}, Investment ${s.investment}, Protection ${s.protection}. Income ₹${a.income.toLocaleString("en-IN")}/month, ${a.dependents} dependents. Write warm 2-sentence personalized summary. Mention strongest and weakest area. Address as "you". Under 60 words. Plain text only.`;
+export async function getAIScoreNarrative(assessment: Assessment, scores: Scores): Promise<string> {
+  const prompt = `You are an expert Indian personal finance advisor for IDBI Bank. A customer scored ${scores.overall}/100 on their Financial Health Score. Breakdown: Income Utilization ${scores.incomeUtilization}, Savings ${scores.savingsRate}, Debt Health ${scores.debtHealth}, Investments ${scores.investment}, Protection ${scores.protection}. Monthly income ₹${assessment.income.toLocaleString("en-IN")}, Dependents: ${assessment.dependents}. Write a warm, personalized 2-sentence plain English summary. Mention their strongest and weakest area. Address them as "you". Under 60 words.`;
   try { return (await generate([{ role: "user", parts: [{ text: prompt }] }])).trim(); } catch { return ""; }
 }
 
 export interface ChatMessage { role: "user" | "model"; text: string; }
 
-export async function sendChatMessage(history: ChatMessage[], userMessage: string, a: Assessment, s: Scores): Promise<string> {
-  const sys = `You are FinHealth AI Advisor for IDBI Bank. Customer: Score ${s.overall}/100, Income ₹${a.income.toLocaleString("en-IN")}/month, Savings ₹${a.monthlySavings.toLocaleString("en-IN")}/month, EMI ₹${a.monthlyEMI.toLocaleString("en-IN")}/month, Credit Score ${a.creditScore}, Emergency Fund ${a.emergencyFundMonths} months, Term Insurance: ${a.hasTermInsurance}, Health Insurance: ${a.hasHealthInsurance}, Dependents: ${a.dependents}. Be conversational, specific to their numbers, recommend IDBI products. Under 150 words. Plain text.`;
+export async function sendChatMessage(history: ChatMessage[], userMessage: string, assessment: Assessment, scores: Scores): Promise<string> {
+  const sys = `You are FinHealth AI Advisor, a friendly Indian personal finance advisor for IDBI Bank. Customer: Score ${scores.overall}/100, Income ₹${assessment.income.toLocaleString("en-IN")}/month, Savings ₹${assessment.monthlySavings.toLocaleString("en-IN")}/month, EMI ₹${assessment.monthlyEMI.toLocaleString("en-IN")}/month, Credit Score ${assessment.creditScore}, Emergency Fund ${assessment.emergencyFundMonths} months, Term Insurance: ${assessment.hasTermInsurance}, Health Insurance: ${assessment.hasHealthInsurance}, Dependents: ${assessment.dependents}. Be conversational, specific to their numbers, recommend IDBI products. Under 150 words.`;
   const contents = [
     { role: "user", parts: [{ text: sys }] },
-    { role: "model", parts: [{ text: "Ready to help with personalized financial advice!" }] },
-    ...history.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
+    { role: "model", parts: [{ text: "Understood! Ready to help with personalized financial advice." }] },
+    ...history.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
     { role: "user", parts: [{ text: userMessage }] },
   ];
-  try { return (await generate(contents)).trim(); } catch { return "Sorry, try again."; }
+  try { return (await generate(contents)).trim(); } catch { return "Sorry, I encountered an error. Please try again."; }
 }
