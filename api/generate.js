@@ -1,7 +1,7 @@
 // ponytail: Vercel serverless proxy for Vertex AI Gemini — keeps service account server-side
 const PROJECT = process.env.GCP_PROJECT_ID || "finhealth-vertex-ai";
 const LOCATION = "us-central1";
-const MODEL = "gemini-1.5-flash";
+const MODEL = "gemini-2.5-flash";
 const VERTEX_URL = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
 
 async function getAccessToken() {
