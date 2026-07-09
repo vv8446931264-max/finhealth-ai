@@ -1,8 +1,5 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "framework": "vite",
-  "functions": {
-    "api/generate.js": { "runtime": "nodejs20.x" }
-  }
+  "framework": "vite"
 }
