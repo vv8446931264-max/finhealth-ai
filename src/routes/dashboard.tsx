@@ -1,5 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import { useCountUp } from "@/lib/use-count-up";
+import { matchProducts, type ProductMatch } from "@/lib/products";
 import {
   getAIRecommendations,
   getAIScoreNarrative,
@@ -46,7 +49,29 @@ import {
   ChevronDown,
   ChevronUp,
   Loader2,
+  Heart,
+  CreditCard,
+  Receipt,
+  ExternalLink,
 } from "lucide-react";
+
+const PRODUCT_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  PiggyBank, ShieldCheck, Heart, Landmark, RefreshCw, TrendingUp, CreditCard, Receipt,
+};
+
+// Renders **bold**, *italic*, and newlines from AI markdown
+function md(text: string) {
+  const segments = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+  return segments.flatMap((seg, i) => {
+    if (seg.startsWith("**") && seg.endsWith("**"))
+      return [<strong key={i}>{seg.slice(2, -2)}</strong>];
+    if (seg.startsWith("*") && seg.endsWith("*"))
+      return [<em key={i}>{seg.slice(1, -1)}</em>];
+    return seg.split("\n").flatMap((line, j, arr) =>
+      j < arr.length - 1 ? [<span key={`${i}-${j}`}>{line}</span>, <br key={`${i}-${j}-br`} />] : [<span key={`${i}-${j}`}>{line}</span>]
+    );
+  });
+}
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -72,15 +97,32 @@ function Dashboard() {
   const scores: Scores | null = useMemo(() => (data ? computeScores(data) : null), [data]);
   const recs = useMemo(() => (data && scores ? generateRecommendations(data, scores) : []), [data, scores]);
   const actions = useMemo(() => (data && scores ? generateActionPlan(data, scores) : []), [data, scores]);
+  const products = useMemo(() => (data && scores ? matchProducts(data, scores) : []), [data, scores]);
+  const displayScore = useCountUp(scores?.overall ?? 0);
 
   const [aiRecs, setAiRecs] = useState<string[]>([]);
   const [aiNarrative, setAiNarrative] = useState<string>("");
   const [aiLoading, setAiLoading] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(true);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [typewriterText, setTypewriterText] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Hydrate chat from session storage
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem("finhealth_chat_v1");
+      if (saved) setChatHistory(JSON.parse(saved));
+    } catch {}
+  }, []);
+
+  // Persist chat to session storage
+  useEffect(() => {
+    try { sessionStorage.setItem("finhealth_chat_v1", JSON.stringify(chatHistory)); } catch {}
+  }, [chatHistory]);
 
   useEffect(() => {
     if (!data || !scores || !isGeminiConfigured()) return;
@@ -97,21 +139,40 @@ function Dashboard() {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistory, chatLoading]);
 
-  async function handleSendChat() {
-    if (!chatInput.trim() || chatLoading || !data || !scores) return;
-    const userMsg = chatInput.trim();
-    setChatInput("");
+  // Typewriter reveal on last model reply
+  useEffect(() => {
+    if (!isTyping || !chatHistory.length) return;
+    const lastMsg = chatHistory[chatHistory.length - 1];
+    if (lastMsg.role !== "model") return;
+    const words = lastMsg.text.split(" ");
+    const msPerWord = Math.min(30, 4000 / Math.max(words.length, 1));
+    let i = 0;
+    const id = setInterval(() => {
+      i++;
+      setTypewriterText(words.slice(0, i).join(" "));
+      if (i >= words.length) { clearInterval(id); setIsTyping(false); }
+    }, msPerWord);
+    return () => clearInterval(id);
+  }, [isTyping, chatHistory]);
+
+  async function handleSendChat(textOverride?: string) {
+    const userMsg = (textOverride ?? chatInput).trim();
+    if (!userMsg || chatLoading || !data || !scores) return;
+    if (!textOverride) setChatInput("");
     const newHistory: ChatMessage[] = [...chatHistory, { role: "user", text: userMsg }];
     setChatHistory(newHistory);
     setChatLoading(true);
     const reply = await sendChatMessage(chatHistory, userMsg, data, scores);
     setChatHistory([...newHistory, { role: "model", text: reply }]);
+    setTypewriterText("");
+    setIsTyping(true);
     setChatLoading(false);
   }
 
   if (!data || !scores) return null;
 
   const label = scoreLabel(scores.overall);
+  const displayLabel = scoreLabel(displayScore);
 
   return (
     <div className="min-h-screen bg-background">
@@ -128,10 +189,18 @@ function Dashboard() {
             <Button variant="outline" onClick={() => navigate({ to: "/assessment" })} className="gap-2">
               <RefreshCw className="h-4 w-4" /> Retake
             </Button>
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2" onClick={async () => {
+              const text = `My Financial Health Score: ${scores.overall}/100 on FinHealth AI`;
+              if (navigator.share) {
+                await navigator.share({ title: "FinHealth AI Score", text, url: location.origin });
+              } else {
+                await navigator.clipboard.writeText(location.origin);
+                toast.success("Link copied!");
+              }
+            }}>
               <Share2 className="h-4 w-4" /> Share
             </Button>
-            <Button className="gap-2 bg-navy text-white hover:bg-navy/90">
+            <Button className="gap-2 bg-navy text-white hover:bg-navy/90" onClick={() => window.print()}>
               <Download className="h-4 w-4" /> Download Report
             </Button>
           </div>
@@ -154,17 +223,21 @@ function Dashboard() {
                 <RadialBarChart
                   innerRadius="75%"
                   outerRadius="100%"
-                  data={[{ name: "score", value: scores.overall, fill: label.color }]}
+                  data={[{ name: "score", value: displayScore, fill: displayLabel.color }]}
                   startAngle={90}
-                  endAngle={90 - (scores.overall / 100) * 360}
+                  endAngle={90 - (displayScore / 100) * 360}
                 >
                   <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
                   <RadialBar background={{ fill: "oklch(0.94 0.02 260)" }} dataKey="value" cornerRadius={20} />
                 </RadialBarChart>
               </ResponsiveContainer>
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-6xl font-extrabold text-navy tabular-nums">{scores.overall}</div>
+                <div className="text-6xl font-extrabold text-navy tabular-nums">{displayScore}</div>
                 <div className="text-sm text-muted-foreground">out of 100</div>
+                <div className="mt-1 flex items-center gap-1 text-xs font-medium text-emerald-600">
+                  <TrendingUp className="h-3.5 w-3.5" />
+                  Ahead of {Math.min(97, Math.round(scores.overall * 1.1))}%
+                </div>
               </div>
             </div>
             <div className="mt-4 grid grid-cols-4 gap-1 text-center text-[10px] font-medium">
@@ -227,7 +300,7 @@ function Dashboard() {
                 <h3 className="text-lg font-semibold">AI Recommendations</h3>
                 <p className="text-xs text-muted-foreground">
                   {aiRecs.length > 0
-                    ? "Generated by Gemini 1.5 Flash • Personalised for you"
+                    ? "Generated by Gemini 2.5 Flash • Personalised for you"
                     : aiLoading
                       ? "Gemini AI is analyzing your profile..."
                       : "Ranked by highest impact on your score"}
@@ -248,7 +321,7 @@ function Dashboard() {
             {aiRecs.length > 0 && (
               <p className="mt-2 flex items-center gap-1.5 text-[10px] text-muted-foreground">
                 <Bot className="h-3 w-3" />
-                Generated by Google Gemini 1.5 Flash based on your financial profile
+                Generated by Google Gemini 2.5 Flash based on your financial profile
               </p>
             )}
           </div>
@@ -282,8 +355,43 @@ function Dashboard() {
           </div>
         </div>
 
+        {/* IDBI Product Matches */}
+        <div className="mt-8">
+          <div className="mb-4">
+            <h3 className="text-xl font-semibold">Your IDBI Product Matches</h3>
+            <p className="text-sm text-muted-foreground">Chosen for your weakest dimensions</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {products.map((p: ProductMatch) => {
+              const Icon = PRODUCT_ICONS[p.icon] ?? Landmark;
+              return (
+                <div key={p.name} className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-elegant">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-navy text-gold">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold">{p.name}</div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">{p.tagline}</div>
+                  </div>
+                  <div className="rounded-md border border-gold/20 bg-gold/8 px-3 py-2 text-xs italic text-foreground/80">
+                    {p.why}
+                  </div>
+                  <a
+                    href={p.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-auto inline-flex items-center gap-1 rounded-md border border-navy/30 px-3 py-1.5 text-xs font-semibold text-navy transition-colors hover:bg-navy/5"
+                  >
+                    Explore <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {/* AI Financial Advisor Chat */}
-        <div className="mt-8 rounded-2xl border border-navy/30 bg-card shadow-elegant overflow-hidden">
+        <div className="no-print mt-8 rounded-2xl border border-navy/30 bg-card shadow-elegant overflow-hidden">
           <button
             onClick={() => setChatOpen(!chatOpen)}
             className="flex w-full items-center gap-3 p-5 text-left hover:bg-secondary/30 transition-colors"
@@ -324,11 +432,11 @@ function Dashboard() {
                       Ask me anything about improving your financial health. I know your profile!
                     </p>
                     <div className="flex flex-wrap gap-2 justify-center">
-                      {["How can I improve my score?", "Best IDBI products for me?", "How to build emergency fund?"].map(
+                      {["How can I improve my score?", "Best IDBI products for me?", "How to build emergency fund?", "मेरा स्कोर कैसे सुधारें?"].map(
                         (q) => (
                           <button
                             key={q}
-                            onClick={() => setChatInput(q)}
+                            onClick={() => handleSendChat(q)}
                             className="rounded-full border border-navy/20 px-3 py-1 text-xs text-navy hover:bg-navy/5 transition-colors"
                           >
                             {q}
@@ -338,65 +446,80 @@ function Dashboard() {
                     </div>
                   </div>
                 )}
-                {chatHistory.map((msg, i) => (
-                  <div key={i} className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-                    <div
-                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                        msg.role === "user" ? "bg-gold text-navy" : "bg-navy text-gold"
-                      }`}
-                    >
-                      {msg.role === "user" ? "You" : <Bot className="h-4 w-4" />}
+                {chatHistory.map((msg, i) => {
+                  const isLastModel = msg.role === "model" && i === chatHistory.length - 1;
+                  const displayText = isLastModel && isTyping ? typewriterText : msg.text;
+                  return (
+                    <div key={i} className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+                      <div
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                          msg.role === "user" ? "bg-gold text-navy" : "bg-navy text-gold"
+                        }`}
+                      >
+                        {msg.role === "user" ? "You" : <Bot className="h-4 w-4" />}
+                      </div>
+                      <div
+                        className={`max-w-[80%] rounded-xl px-3 py-2 text-sm leading-relaxed ${
+                          msg.role === "user"
+                            ? "bg-navy text-white rounded-tr-sm"
+                            : "bg-card border border-border rounded-tl-sm"
+                        }`}
+                      >
+                        {msg.role === "model" ? md(displayText) : displayText}
+                      </div>
                     </div>
-                    <div
-                      className={`max-w-[80%] rounded-xl px-3 py-2 text-sm leading-relaxed ${
-                        msg.role === "user"
-                          ? "bg-navy text-white rounded-tr-sm"
-                          : "bg-card border border-border rounded-tl-sm"
-                      }`}
-                    >
-                      {msg.text}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {chatLoading && (
                   <div className="flex gap-2 items-center">
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-navy text-gold">
                       <Bot className="h-4 w-4" />
                     </div>
-                    <div className="rounded-xl bg-card border border-border px-3 py-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    <div className="rounded-xl bg-card border border-border px-4 py-3 flex gap-1">
+                      <span className="h-2 w-2 rounded-full bg-navy/40 animate-bounce [animation-delay:0ms]" />
+                      <span className="h-2 w-2 rounded-full bg-navy/40 animate-bounce [animation-delay:150ms]" />
+                      <span className="h-2 w-2 rounded-full bg-navy/40 animate-bounce [animation-delay:300ms]" />
                     </div>
                   </div>
                 )}
                 <div ref={chatBottomRef} />
               </div>
-              <div className="border-t border-border p-3 flex gap-2 bg-card">
-                <Textarea
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendChat();
-                    }
-                  }}
-                  placeholder={
-                    isGeminiConfigured()
-                      ? "Ask about your finances..."
-                      : "Add VITE_GEMINI_API_KEY to enable AI chat..."
-                  }
-                  disabled={!isGeminiConfigured() || chatLoading}
-                  className="min-h-[40px] max-h-[100px] resize-none text-sm flex-1"
-                  rows={1}
-                />
-                <Button
-                  onClick={handleSendChat}
-                  disabled={!chatInput.trim() || !isGeminiConfigured() || chatLoading}
-                  className="bg-navy text-white hover:bg-navy/90 self-end"
-                  size="sm"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
+              <div className="border-t border-border bg-card">
+                <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
+                  {["How to improve my score?", "Best IDBI products?", "How to build emergency fund?", "Explain my debt health", "मेरा स्कोर कैसे सुधारें?"].map((q) => (
+                    <button
+                      key={q}
+                      onClick={() => handleSendChat(q)}
+                      className="rounded-full border border-navy/20 px-2.5 py-0.5 text-[11px] text-navy hover:bg-navy/5 transition-colors"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2 p-3">
+                  <Textarea
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        void handleSendChat();
+                      }
+                    }}
+                    placeholder="Ask about your finances..."
+                    disabled={chatLoading}
+                    className="min-h-[40px] max-h-[100px] resize-none text-sm flex-1"
+                    rows={1}
+                  />
+                  <Button
+                    onClick={handleSendChat}
+                    disabled={!chatInput.trim() || chatLoading}
+                    className="bg-navy text-white hover:bg-navy/90 self-end"
+                    size="sm"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           )}

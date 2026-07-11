@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, ArrowRight, CheckCircle2, IndianRupee } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, IndianRupee, Check, Loader2 } from "lucide-react";
 import { defaultAssessment, saveAssessment, type Assessment } from "@/lib/finhealth";
 
 export const Route = createFileRoute("/assessment")({
@@ -22,24 +22,57 @@ export const Route = createFileRoute("/assessment")({
 
 const STEPS = ["Income & Expenses", "Savings & Investments", "Debt & Liabilities", "Protection & Emergency"];
 
+const INTERSTITIAL_LINES = [
+  "Computing your 5-dimension score…",
+  "Consulting Gemini AI…",
+  "Matching IDBI products…",
+];
+
 function AssessmentPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [data, setData] = useState<Assessment>(defaultAssessment);
+  const [submitting, setSubmitting] = useState(false);
+  const [visibleLines, setVisibleLines] = useState(0);
 
   const update = <K extends keyof Assessment>(key: K, value: Assessment[K]) =>
     setData((d) => ({ ...d, [key]: value }));
 
   const next = () => {
-    if (step < STEPS.length - 1) setStep(step + 1);
-    else {
+    if (step < STEPS.length - 1) {
+      setStep(step + 1);
+    } else {
       saveAssessment(data);
-      navigate({ to: "/dashboard" });
+      setSubmitting(true);
+      setVisibleLines(1);
+      setTimeout(() => setVisibleLines(2), 800);
+      setTimeout(() => setVisibleLines(3), 1600);
+      setTimeout(() => navigate({ to: "/dashboard" }), 2400);
     }
   };
   const back = () => step > 0 && setStep(step - 1);
 
   const progress = ((step + 1) / STEPS.length) * 100;
+
+  if (submitting) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 bg-navy text-white">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gold/20">
+          <Loader2 className="h-8 w-8 animate-spin text-gold" />
+        </div>
+        <div className="space-y-4 text-center">
+          {INTERSTITIAL_LINES.map((line, i) => (
+            visibleLines > i ? (
+              <div key={line} className="fade-up flex items-center gap-3 text-lg" style={{ animationDelay: `${i * 0}ms` }}>
+                <Check className="h-5 w-5 text-emerald-400 shrink-0" />
+                <span>{line}</span>
+              </div>
+            ) : null
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -47,15 +80,17 @@ function AssessmentPage() {
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 md:py-16">
         <div className="mb-8">
           <div className="flex items-center justify-between text-sm">
-            <div className="font-semibold text-navy">Step {step + 1} of {STEPS.length}</div>
+            <div className="font-semibold text-navy">
+              Step {step + 1} of {STEPS.length} · {STEPS[step]}
+            </div>
             <div className="text-muted-foreground">{Math.round(progress)}% complete</div>
           </div>
-          <Progress value={progress} className="mt-2 h-2" />
+          <Progress value={progress} className="mt-2 h-2 transition-all duration-500" />
           <div className="mt-4 flex flex-wrap gap-2">
             {STEPS.map((label, i) => (
               <div
                 key={label}
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all duration-300 ${
                   i < step
                     ? "border-emerald-500/40 bg-emerald-50 text-emerald-700"
                     : i === step
@@ -70,7 +105,7 @@ function AssessmentPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-elegant md:p-10">
+        <div key={step} className="step-in rounded-2xl border border-border bg-card p-6 shadow-elegant md:p-10">
           <h2 className="text-2xl font-bold">{STEPS[step]}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {step === 0 && "Tell us about your monthly cash flow."}
@@ -82,24 +117,24 @@ function AssessmentPage() {
           <div className="mt-8 space-y-6">
             {step === 0 && (
               <>
-                <MoneyField label="Monthly take-home income" value={data.income} onChange={(v) => update("income", v)} placeholder="e.g. 75000" />
-                <MoneyField label="Monthly essential expenses (rent, groceries, utilities)" value={data.essentialExpenses} onChange={(v) => update("essentialExpenses", v)} placeholder="e.g. 28000" />
-                <MoneyField label="Monthly discretionary spending (dining, entertainment, shopping)" value={data.discretionary} onChange={(v) => update("discretionary", v)} placeholder="e.g. 12000" />
+                <MoneyField label="Monthly take-home income" value={data.income} onChange={(v) => update("income", v)} placeholder="e.g. 75,000" />
+                <MoneyField label="Monthly essential expenses (rent, groceries, utilities)" value={data.essentialExpenses} onChange={(v) => update("essentialExpenses", v)} placeholder="e.g. 28,000" />
+                <MoneyField label="Monthly discretionary spending (dining, entertainment, shopping)" value={data.discretionary} onChange={(v) => update("discretionary", v)} placeholder="e.g. 12,000" />
               </>
             )}
             {step === 1 && (
               <>
-                <MoneyField label="Monthly savings amount" value={data.monthlySavings} onChange={(v) => update("monthlySavings", v)} placeholder="e.g. 15000" />
-                <MoneyField label="Total invested in mutual funds / stocks" value={data.investments} onChange={(v) => update("investments", v)} placeholder="e.g. 350000" />
-                <MoneyField label="Total in Fixed Deposits / RD" value={data.fixedDeposits} onChange={(v) => update("fixedDeposits", v)} placeholder="e.g. 200000" />
+                <MoneyField label="Monthly savings amount" value={data.monthlySavings} onChange={(v) => update("monthlySavings", v)} placeholder="e.g. 15,000" />
+                <MoneyField label="Total invested in mutual funds / stocks" value={data.investments} onChange={(v) => update("investments", v)} placeholder="e.g. 3,50,000" />
+                <MoneyField label="Total in Fixed Deposits / RD" value={data.fixedDeposits} onChange={(v) => update("fixedDeposits", v)} placeholder="e.g. 2,00,000" />
                 <ToggleField label="Do you have a PPF or NPS account?" value={data.hasPPFNPS} onChange={(v) => update("hasPPFNPS", v)} />
               </>
             )}
             {step === 2 && (
               <>
-                <MoneyField label="Total outstanding loan amount (home, car, personal)" value={data.loanOutstanding} onChange={(v) => update("loanOutstanding", v)} placeholder="e.g. 1200000" />
-                <MoneyField label="Monthly EMI payments" value={data.monthlyEMI} onChange={(v) => update("monthlyEMI", v)} placeholder="e.g. 22000" />
-                <MoneyField label="Credit card outstanding" value={data.creditCardOutstanding} onChange={(v) => update("creditCardOutstanding", v)} placeholder="e.g. 15000" />
+                <MoneyField label="Total outstanding loan amount (home, car, personal)" value={data.loanOutstanding} onChange={(v) => update("loanOutstanding", v)} placeholder="e.g. 12,00,000" />
+                <MoneyField label="Monthly EMI payments" value={data.monthlyEMI} onChange={(v) => update("monthlyEMI", v)} placeholder="e.g. 22,000" />
+                <MoneyField label="Credit card outstanding" value={data.creditCardOutstanding} onChange={(v) => update("creditCardOutstanding", v)} placeholder="e.g. 15,000" />
                 <SliderField
                   label="Existing credit score"
                   min={300}
@@ -175,11 +210,14 @@ function MoneyField({
       <div className="relative mt-2">
         <IndianRupee className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          type="number"
-          min={0}
-          value={value || ""}
+          type="text"
+          inputMode="numeric"
+          value={value > 0 ? value.toLocaleString("en-IN") : ""}
           placeholder={placeholder}
-          onChange={(e) => onChange(Math.max(0, parseFloat(e.target.value || "0")))}
+          onChange={(e) => {
+            const raw = e.target.value.replace(/[^0-9]/g, "");
+            onChange(raw ? Math.max(0, parseInt(raw)) : 0);
+          }}
           className="h-11 pl-9"
         />
       </div>

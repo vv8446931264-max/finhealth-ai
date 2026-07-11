@@ -106,3 +106,54 @@
 @utility shadow-elegant {
   box-shadow: 0 25px 50px -20px oklch(0.22 0.11 275 / 0.25);
 }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px 0 oklch(0.82 0.15 82 / 0.2); }
+  50% { box-shadow: 0 0 40px 10px oklch(0.82 0.15 82 / 0.35); }
+}
+
+.btn-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.btn-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(110deg, transparent 40%, rgba(255,255,255,.25) 50%, transparent 60%);
+  background-size: 200% 100%;
+  animation: shimmer 2.5s infinite;
+  pointer-events: none;
+}
+
+.card-float {
+  animation: float 4s ease-in-out infinite, glow-pulse 4s ease-in-out infinite;
+}
+
+@keyframes step-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.step-in {
+  animation: step-in 300ms ease-out;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up {
+  animation: fade-up 400ms ease-out both;
+}
+
+@media print {
+  header, footer, .no-print { display: none !important; }
+}

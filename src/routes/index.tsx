@@ -1,36 +1,92 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { SiteHeader, SiteFooter } from "@/components/site-chrome";
 import { Gauge, Sparkles, ListChecks, ShieldCheck, TrendingUp, ArrowRight } from "lucide-react";
+import { useCountUp } from "@/lib/use-count-up";
 
 export const Route = createFileRoute("/")({
   component: Landing,
 });
 
+const DIMS = [
+  { label: "Savings Rate", v: 82, color: "#f9a825" },
+  { label: "Debt Health", v: 91, color: "#4ade80" },
+  { label: "Investment", v: 67, color: "#60a5fa" },
+];
+
+function FloatingScoreCard() {
+  return (
+    <div className="card-float hidden lg:flex lg:items-center lg:justify-center">
+      <div className="w-72 rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+        <div className="flex flex-col items-center">
+          <div className="relative h-32 w-32">
+            <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
+              <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="10" />
+              <circle
+                cx="60" cy="60" r="50" fill="none"
+                stroke="#f9a825" strokeWidth="10"
+                strokeDasharray={`${(78 / 100) * 314} 314`}
+                strokeLinecap="round"
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-3xl font-extrabold text-white">78</span>
+              <span className="text-xs font-semibold text-emerald-400">Good</span>
+            </div>
+          </div>
+          <div className="mt-1 text-xs text-white/60">Financial Health Score</div>
+        </div>
+        <div className="mt-4 space-y-3">
+          {DIMS.map((d) => (
+            <div key={d.label}>
+              <div className="mb-1 flex justify-between text-xs text-white/70">
+                <span>{d.label}</span>
+                <span className="font-semibold text-white">{d.v}</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full rounded-full" style={{ width: `${d.v}%`, backgroundColor: d.color }} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 flex items-center justify-between text-xs text-white/40">
+          <span>Powered by Gemini AI</span>
+          <Sparkles className="h-3 w-3" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Landing() {
+  const dimCount = useCountUp(5);
+  const minCount = useCountUp(3);
+  const privCount = useCountUp(100);
+
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
 
       {/* Hero */}
       <section className="bg-hero-gradient relative overflow-hidden text-white">
-        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-20 md:grid-cols-2 md:py-28">
+        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-20 md:grid-cols-2 md:py-28 lg:items-center">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-gold/40 bg-white/5 px-3 py-1 text-xs font-medium text-gold">
               <Sparkles className="h-3.5 w-3.5" /> AI-powered • IDBI Hackathon 2026
             </div>
-            <h1 className="mt-5 text-4xl font-extrabold leading-[1.1] md:text-6xl">
-              Know Your <span className="text-gold">Financial Health Score</span>
+            <h1 className="mt-5 text-4xl font-extrabold leading-[1.1] md:text-5xl">
+              Know your{" "}
+              <span className="text-gold">Financial Health Score</span>{" "}
+              in 3 minutes
             </h1>
             <p className="mt-5 max-w-lg text-lg text-white/80">
-              AI-powered analysis of your finances in 2 minutes. Get a personalised score,
-              recommendations and a 30-day action plan — free, from IDBI Bank.
+              Gemini AI analyses your money across 5 dimensions and matches you with the right IDBI products — free, private, no login.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 to="/assessment"
-                className="inline-flex items-center gap-2 rounded-md bg-gold px-6 py-3 text-base font-semibold text-navy shadow-elegant transition hover:brightness-95"
+                className="btn-shimmer inline-flex items-center gap-2 rounded-md bg-gold px-6 py-3 text-base font-semibold text-navy shadow-elegant transition hover:brightness-95"
               >
-                Get Your Score Now <ArrowRight className="h-4 w-4" />
+                Get My Free Score <ArrowRight className="h-4 w-4" />
               </Link>
               <a
                 href="#features"
@@ -39,44 +95,37 @@ function Landing() {
                 How it works
               </a>
             </div>
-            <div className="mt-8 flex items-center gap-6 text-sm text-white/70">
-              <div><span className="text-2xl font-bold text-white">2 min</span><div>to complete</div></div>
+
+            {/* Animated stats strip */}
+            <div className="mt-8 flex flex-wrap items-center gap-5 text-sm text-white/70">
+              <div>
+                <span className="text-2xl font-bold text-white">{dimCount}</span>
+                <div>dimensions analysed</div>
+              </div>
               <div className="h-8 w-px bg-white/20" />
-              <div><span className="text-2xl font-bold text-white">5</span><div>dimensions scored</div></div>
+              <div>
+                <span className="text-2xl font-bold text-white">{minCount} min</span>
+                <div>to your score</div>
+              </div>
               <div className="h-8 w-px bg-white/20" />
-              <div><span className="text-2xl font-bold text-white">100%</span><div>private</div></div>
+              <div>
+                <span className="text-2xl font-bold text-white">{privCount}%</span>
+                <div>private</div>
+              </div>
+              <div className="h-8 w-px bg-white/20" />
+              <div>
+                <span className="text-2xl font-bold text-white">24×7</span>
+                <div>AI advisor</div>
+              </div>
             </div>
+
+            {/* Trust bar */}
+            <p className="mt-5 text-xs text-white/40">
+              Secured on Google Cloud · Vertex AI Gemini · Data stays in your session · No account needed
+            </p>
           </div>
 
-          <div className="relative">
-            <div className="absolute -inset-4 rounded-3xl bg-gold/20 blur-3xl" />
-            <div className="relative rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-              <div className="flex items-center justify-between">
-                <div className="text-xs uppercase tracking-widest text-white/60">Your Score</div>
-                <div className="rounded-full bg-emerald-400/20 px-2 py-0.5 text-xs font-medium text-emerald-300">Excellent</div>
-              </div>
-              <div className="mt-6 flex items-end gap-4">
-                <div className="text-7xl font-extrabold text-white">84</div>
-                <div className="pb-2 text-sm text-white/70">/ 100</div>
-              </div>
-              <div className="mt-6 grid grid-cols-2 gap-3 text-xs">
-                {[
-                  { label: "Savings Rate", v: 88 },
-                  { label: "Debt Health", v: 92 },
-                  { label: "Investment", v: 74 },
-                  { label: "Protection", v: 81 },
-                ].map((d) => (
-                  <div key={d.label} className="rounded-lg border border-white/10 bg-white/5 p-3">
-                    <div className="text-white/60">{d.label}</div>
-                    <div className="mt-1 text-lg font-semibold text-white">{d.v}</div>
-                    <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
-                      <div className="h-full bg-gold" style={{ width: `${d.v}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <FloatingScoreCard />
         </div>
       </section>
 
@@ -95,7 +144,7 @@ function Landing() {
             {
               icon: Gauge,
               title: "Instant Score",
-              body: "Get a 0–100 Financial Health Score across 5 dimensions in under 2 minutes.",
+              body: "Get a 0–100 Financial Health Score across 5 dimensions in under 3 minutes.",
             },
             {
               icon: Sparkles,
@@ -150,9 +199,9 @@ function Landing() {
             </div>
             <Link
               to="/assessment"
-              className="inline-flex items-center gap-2 rounded-md bg-gold px-6 py-3 text-base font-semibold text-navy transition hover:brightness-95"
+              className="btn-shimmer inline-flex items-center gap-2 rounded-md bg-gold px-6 py-3 text-base font-semibold text-navy transition hover:brightness-95"
             >
-              Start Free Assessment <ArrowRight className="h-4 w-4" />
+              Get My Free Score <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </div>
