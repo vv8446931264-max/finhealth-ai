@@ -1,7 +1,6 @@
 # FinHealth AI
 
-**IDBI Innovate 2026 — Problem Statement 3: Financial Health Score**  
-Team: **IDBI_Vicks** | Leader: **Vivek Vishwakarma**
+**IDBI Innovate 2026 — Problem Statement 3: Financial Health Score** 
 
 Live: https://finhealth-ai-india-1010587631565.asia-south1.run.app
 
